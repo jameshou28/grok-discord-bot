@@ -53,6 +53,8 @@ async def on_message(message):
 
 @client.tree.command(name="grok", description="ask grok")
 @app_commands.describe(prompt="ask grok")
+@app_commands.allowed_installs(guilds=True, users=True)
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
 async def grok(interaction: discord.Interaction, prompt: str):
     await interaction.response.defer()
     try:
@@ -62,6 +64,7 @@ async def grok(interaction: discord.Interaction, prompt: str):
             msg = msg[:1996] + "..."
         await interaction.followup.send(msg)
     except Exception as e:
+        print(f"Error: {e}")
         await interaction.followup.send(f"Error generating response: {e}")
 
 client.run(os.getenv("DISCORD_TOKEN"))

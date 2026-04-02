@@ -5,12 +5,45 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
+import google.api_core.exceptions
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel(
-    "gemini-2.5-flash",
-    system_instruction="You are acting as Grok LLM. Limit responses to 75 characters. Do not use markdown. Use single lines. Use an extravagant amount of dark humor and dad jokes, especially when least expected. "
-)
+# Load multiple API keys from GEMINI_API_KEYS (comma separated). Fallback to single key.
+keys_env = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
+API_KEYS = [k.strip() for k in keys_env.split(",") if k.strip()]
+
+current_key_idx = 0
+
+def setup_model(key_idx):
+    genai.configure(api_key=API_KEYS[key_idx])
+    return genai.GenerativeModel(
+        "gemini-2.5-flash",
+        system_instruction="You are acting as Grok LLM. Limit responses to 75 characters. Do not use markdown. Use single lines. Use an extravagant amount of dark humor and dad jokes, especially when least expected. "
+    )
+
+if API_KEYS:
+    model = setup_model(current_key_idx)
+else:
+    print("WARNING: No Gemini API Keys found!")
+
+async def generate_with_rotation(prompt):
+    global current_key_idx, model
+    attempts = 0
+    max_attempts = max(1, len(API_KEYS))
+    
+    while attempts < max_attempts:
+        try:
+            return await model.generate_content_async(prompt)
+        except google.api_core.exceptions.ResourceExhausted:
+            attempts += 1
+            if attempts >= max_attempts:
+                raise Exception("All configured API keys have hit their rate limit or quota!")
+            
+            # Switch to next key
+            current_key_idx = (current_key_idx + 1) % len(API_KEYS)
+            print(f"API Key exhausted! Rotating to key {current_key_idx + 1} of {len(API_KEYS)}...")
+            model = setup_model(current_key_idx)
+            
+    raise Exception("Failed to generate response due to quota limits.")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -43,7 +76,7 @@ async def on_message(message):
 
         async with message.channel.typing():
             try:
-                response = await model.generate_content_async(prompt)
+                response = await generate_with_rotation(prompt)
                 msg = response.text
                 if len(msg) > 2000:
                     msg = msg[:1996] + "..."
@@ -58,7 +91,7 @@ async def on_message(message):
 async def grok(interaction: discord.Interaction, prompt: str):
     await interaction.response.defer()
     try:
-        response = await model.generate_content_async(prompt)
+        response = await generate_with_rotation(prompt)
         msg = response.text
         if len(msg) > 2000:
             msg = msg[:1996] + "..."

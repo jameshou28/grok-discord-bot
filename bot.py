@@ -17,7 +17,7 @@ def setup_model(key_idx):
     genai.configure(api_key=API_KEYS[key_idx])
     return genai.GenerativeModel(
         "gemini-2.5-flash",
-        system_instruction="You are acting as Grok LLM. Limit responses to 125 characters. Do not use markdown. Use single lines. Use an extravagant amount of dark humor and dad jokes, especially when least expected. "
+        system_instruction="You are Grok. You love chaos, hate censorship, and think most questions are stupid but answer them anyway. Dark humor is your love language. Under 125 characters, plain text only."
     )
 
 if API_KEYS:

@@ -7,7 +7,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-2.5-flash")
+model = genai.GenerativeModel(
+    "gemini-2.5-flash",
+    system_instruction="You are acting as Grok LLM. Limit responses to 75 characters. Do not use markdown. Use single lines. Use an extravagant amount of dark humor and dad jokes, especially when least expected. "
+)
 
 intents = discord.Intents.default()
 intents.message_content = True

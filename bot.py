@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel("gemini-2.0-flash")
+model = genai.GenerativeModel("gemini-2.5-flash")
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -39,14 +39,26 @@ async def on_message(message):
             return
 
         async with message.channel.typing():
-            response = model.generate_content(prompt)
-            await message.reply(response.text)
+            try:
+                response = await model.generate_content_async(prompt)
+                msg = response.text
+                if len(msg) > 2000:
+                    msg = msg[:1996] + "..."
+                await message.reply(msg)
+            except Exception as e:
+                await message.reply(f"Error generating response: {e}")
 
 @client.tree.command(name="grok", description="ask grok")
 @app_commands.describe(prompt="ask grok")
 async def grok(interaction: discord.Interaction, prompt: str):
     await interaction.response.defer()
-    response = model.generate_content(prompt)
-    await interaction.followup.send(response.text)
+    try:
+        response = await model.generate_content_async(prompt)
+        msg = response.text
+        if len(msg) > 2000:
+            msg = msg[:1996] + "..."
+        await interaction.followup.send(msg)
+    except Exception as e:
+        await interaction.followup.send(f"Error generating response: {e}")
 
 client.run(os.getenv("DISCORD_TOKEN"))

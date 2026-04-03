@@ -95,7 +95,7 @@ async def on_message(message):
                     msg = msg[:1996] + "..."
                 await message.reply(msg)
             except Exception as e:
-                await message.reply(f"Error generating response: {e}")
+                await message.reply(f"you killed grok: {e}")
 
 @client.tree.command(name="grok", description="ask grok")
 @app_commands.describe(

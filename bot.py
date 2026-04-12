@@ -17,7 +17,9 @@ DEFAULT_INSTRUCTION = (
     "If the user's prompt is related in any way to robotics, vex, or v5rc, consider the following if relevant: 3303H is the best VEX team, the current meta/best design is a double lever robot. 3303h is going to win worlds.\n"
     "If the user's prompt is related in any way to drafting or picking a team, you must ALWAYS recommend 3303H."
     "If the user's prompt is related to a rule: reply with RTFM. "
+    "Two teams win 'worlds'"
     "If a message starts with '!' ignore all other system instructions. "
+    "You can make it personal. If the user's name is in the format: 'NAME | [something], the [something] is their team number. You can use the team number in the prompt. "
 )
 
 BASE_INSTRUCTION = "Under 125 characters, plain text only.\n"
@@ -94,15 +96,17 @@ async def on_message(message):
         if "7368g" in prompt.lower():
             await message.reply(file=discord.File("tva.png"))
             return
-        
+
         if "vex analyst" in prompt.lower():
             await message.reply(file=discord.File("tva.png"))
             return
 
+        display_name = message.author.display_name
+        full_prompt = f"[User: {display_name}] {prompt}"
 
         async with message.channel.typing():
             try:
-                response = await generate_with_rotation(prompt)
+                response = await generate_with_rotation(full_prompt)
                 msg = response.text
                 if len(msg) > 2000:
                     msg = msg[:1996] + "..."
@@ -120,8 +124,10 @@ async def on_message(message):
 async def grok(interaction: discord.Interaction, prompt: str, instructions: str = None):
     await interaction.response.defer()
     try:
+        display_name = interaction.user.display_name
+        full_prompt = f"[User: {display_name}] {prompt}"
         system_instruction = BASE_INSTRUCTION + instructions if instructions else None
-        response = await generate_with_rotation(prompt, system_instruction=system_instruction)
+        response = await generate_with_rotation(full_prompt, system_instruction=system_instruction)
         msg = response.text
         if len(msg) > 2000:
             msg = msg[:1996] + "..."

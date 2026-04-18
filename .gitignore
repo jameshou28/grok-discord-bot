@@ -6,3 +6,4 @@ venv/
 env/
 .venv/
 *.old
+bot_logs.txt

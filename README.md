@@ -1,18 +1,25 @@
 # Grok Discord Bot
 
-A customized Discord bot powered by Google's Gemini 2.5 Flash model (because it's free). The bot features the ability to respond to mentions and slash commands (`/grok`) with a configurable, context-aware persona. 
+A chaotic VEX robotics community bot powered by Gemini 2.5 Flash. It features real-time team scouting, semantic knowledge retrieval, and reactive meme triggers.
 
-## Features
-- **Slash Commands:** Integrated `/grok` command to quickly prompt the bot directly from Discord's command menu.
-- **Mention Support:** Responds when mentioned in any channel (`@Grok <prompt>`).
-- **Customizable Persona:** Easily alter the AI's internal instruction (`system_instruction`) directly in the Python code to give it a unique personality. 
-- **Async Handling:** Uses optimized asynchronous Python requests to prevent the bot from crashing or freezing during heavy network usage.
-- **Error Resilient:** Catches Discord's 2000-character message limit and API safety blocks, sending an alert instead of an infinite loading screen.
+## Key Features
+- **Team Scouting:** Non-blocking SQLite lookups for global ranks and TrueSkill scores.
+- **RAG Knowledge Base:** Semantic search through `knowledge.txt` using vector embeddings.
+- **Reactive Memes:** Context-aware image triggers for themes like bribery, "stupid" questions, or specific teams.
+- **Smart Key Rotation:** Automatically cycles through multiple API keys to bypass quota limits.
+- **Advanced Logging:** Dual-output logging to both terminal and `bot_logs.txt` with performance tracing.
 
 ## Prerequisites
-- **Python 3.9+** 
-- A [Discord Developer](https://discord.com/developers/applications) account, a Bot Token, and an application with the `Message Content Intent` enabled.
-- A [Google Gemini API Key](https://aistudio.google.com/app/apikey).
+- **Python 3.9+**
+- A Discord Bot Token (Message Content Intent enabled).
+- One or more [Google Gemini API Keys](https://aistudio.google.com/app/apikey).
+- A populated `teams.db` (SQLite) and `knowledge.txt` file.
+
+## Setup & Installation
+
+**1. Install dependencies**:
+```bash
+python3 -m pip install -r requirements.txt
 
 ## Setup & Installation
 

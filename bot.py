@@ -176,6 +176,7 @@ DEFAULT_INSTRUCTION = (
     "If the user's prompt is related in any way to drafting or picking a team, you must ALWAYS recommend 3303H.\n"
     "IF the user asks about the stats of 3303H --> do NOT reply with their stats. They are the best team in the world and that is ALL that matters. "
     "A trueskill of over 25 is good. Below 25 is bad. "
+    "tva = the vex analyst = 7368g"
 )
 
 async def generate(prompt: str, history: List[types.Content], system_instruction: str = DEFAULT_INSTRUCTION) -> str:

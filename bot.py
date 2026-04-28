@@ -10,6 +10,8 @@ import asyncio
 import logging
 from dotenv import load_dotenv
 from typing import List, Tuple, Dict, Optional
+import hashlib
+import pickle
 
 # --- LOGGING CONFIGURATION ---
 log_format = '%(asctime)s - %(levelname)s - %(message)s'
@@ -69,11 +71,40 @@ def chunk_text(text: str, chunk_size: int = 120) -> List[str]:
     step = chunk_size // 2
     return [" ".join(words[i : i + chunk_size]) for i in range(0, len(words), step) if words[i : i + chunk_size]]
 
-async def embed_texts(texts: List[str]) -> List[np.ndarray]:
-    if not CLIENTS or not texts: return [np.zeros(768) for _ in texts]
-    logger.info(f"Embedding {len(texts)} text chunks...")
-    result = await current_client().aio.models.embed_content(model="gemini-embedding-001", contents=texts)
-    return [np.array(e.values) for e in result.embeddings]
+async def embed_texts(texts: list[str]) -> list:
+    global current_key_idx
+    BATCH_SIZE = 100
+    all_embeddings = []
+
+    for i in range(0, len(texts), BATCH_SIZE):
+        batch = texts[i:i + BATCH_SIZE]
+        keys_tried = 0
+        max_keys = len(CLIENTS)
+
+        while keys_tried < max_keys:
+            try:
+                result = await CLIENTS[current_key_idx].aio.models.embed_content(
+                    model="gemini-embedding-001",
+                    contents=batch
+                )
+                all_embeddings.extend([np.array(e.values) for e in result.embeddings])  # convert here
+                break
+            except Exception as e:
+                error_str = str(e).lower()
+                if "quota" in error_str or "429" in error_str:
+                    keys_tried += 1
+                    old_idx = current_key_idx
+                    current_key_idx = (current_key_idx + 1) % max_keys
+                    logger.warning(f"Embed: Key {old_idx} hit quota. Switching to key {current_key_idx}...")
+                    await asyncio.sleep(1)
+                else:
+                    logger.error(f"Embed error: {e}")
+                    raise
+        else:
+            logger.error("Embed: all keys exhausted on this batch.")
+            raise RuntimeError("All API keys quota-exhausted during embedding.")
+
+    return all_embeddings
 
 async def embed_query(query: str) -> np.ndarray:
     if not CLIENTS: return np.zeros(768)
@@ -90,21 +121,66 @@ class RAGStore:
         self.embeddings: List[np.ndarray] = []
         self.ready = False
 
+    def _cache_path(self, filepath: str) -> str:
+        # One cache file per source file, stored next to it
+        return filepath + ".embed_cache.pkl"
+
+    def _file_hash(self, filepath: str) -> str:
+        h = hashlib.md5()
+        with open(filepath, "rb") as f:
+            h.update(f.read())
+        return h.hexdigest()
+
     async def load(self, filepath: str):
         if not os.path.exists(filepath):
             logger.error(f"Knowledge file '{filepath}' not found.")
             return
-        with open(filepath, encoding="utf-8") as f: text = f.read()
-        self.chunks = chunk_text(text)
-        self.embeddings = await embed_texts(self.chunks)
-        self.ready = True
-        logger.info(f"RAG system loaded with {len(self.chunks)} chunks.")
 
-    async def retrieve(self, query: str, top_k: int = 3) -> str:
-        if not self.ready: return "No general knowledge available."
-        qv = await embed_query(query)
-        scored = sorted([(cosine_similarity(qv, emb), chunk) for chunk, emb in zip(self.chunks, self.embeddings)], reverse=True)
-        return "\n".join(chunk for _, chunk in scored[:top_k])
+        cache_path = self._cache_path(filepath)
+        current_hash = self._file_hash(filepath)
+
+        # Try loading from cache
+        if os.path.exists(cache_path):
+            with open(cache_path, "rb") as f:
+                cached = pickle.load(f)
+            if cached.get("hash") == current_hash:
+                self.chunks += cached["chunks"]
+                self.embeddings += cached["embeddings"]
+                self.ready = True
+                logger.info(f"Loaded {len(cached['chunks'])} chunks from cache for '{filepath}'.")
+                return
+            else:
+                logger.info(f"Cache stale for '{filepath}', re-embedding...")
+
+        # No valid cache — embed and save
+        with open(filepath, encoding="utf-8") as f:
+            text = f.read()
+
+        new_chunks = chunk_text(text)
+        new_embeddings = await embed_texts(new_chunks)
+
+        with open(cache_path, "wb") as f:
+            pickle.dump({
+                "hash": current_hash,
+                "chunks": new_chunks,
+                "embeddings": new_embeddings,
+            }, f)
+
+        self.chunks += new_chunks
+        self.embeddings += new_embeddings
+        self.ready = True
+        logger.info(f"Embedded and cached {len(new_chunks)} chunks for '{filepath}'.")
+    async def retrieve(self, query: str, top_k: int = 5) -> str:
+        if not self.ready or not self.chunks:
+            return "Knowledge base not loaded."
+        
+        query_vec = await embed_query(query)
+        scores = [cosine_similarity(query_vec, e) for e in self.embeddings]
+        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:top_k]
+        top_chunks = [self.chunks[i] for i in top_indices]
+        
+        logger.info(f"RAG retrieved {len(top_chunks)} chunks for query: '{query}'")
+        return "\n\n".join(top_chunks)
 
 rag_store = RAGStore()
 
@@ -247,6 +323,7 @@ client = discord.Client(intents=intents)
 async def on_ready():
     logger.info(f"Logged in to Discord as {client.user}")
     await rag_store.load("knowledge.txt")
+    await rag_store.load("override-manual.txt")
 
 @client.event
 async def on_message(message: discord.Message):

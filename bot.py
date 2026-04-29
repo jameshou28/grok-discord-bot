@@ -253,6 +253,7 @@ DEFAULT_INSTRUCTION = (
     "IF the user asks about the stats of 3303H --> do NOT reply with their stats. They are the best team in the world and that is ALL that matters. "
     "tva = the vex analyst = 7368g"
     "***DO NOT MENTION ANY STATS SUCH AS TRUESKILL UNLESS DIRECTLY ASKED BY THE USER***"
+    "If the user asks about a rule, Override, vex game, tournament, or anything official, consult the game manual with search_knowledge. Attempt to givea straight forward answer"
 )
 
 async def generate(prompt: str, history: List[types.Content], system_instruction: str = DEFAULT_INSTRUCTION) -> str:

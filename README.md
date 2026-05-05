@@ -9,6 +9,13 @@ A chaotic VEX robotics community bot powered by Gemini 2.5 Flash. It features re
 - **Smart Key Rotation:** Automatically cycles through multiple API keys to bypass quota limits.
 - **Advanced Logging:** Dual-output logging to both terminal and `bot_logs.txt` with performance tracing.
 
+## Repo layout
+- `bot.py`: Discord bot entrypoint
+- `teams.db`: SQLite DB of teams (used by `lookup_team`)
+- `knowledge.txt`, `override-manual.txt`: local knowledge sources for RAG
+- `*.embed_cache.pkl`: embedding caches generated on first run (one per knowledge file)
+- `migrate.py`: optional DB loader from an Excel file (`grokTS.xlsx`)
+
 ## Prerequisites
 - **Python 3.9+**
 - A Discord Bot Token (Message Content Intent enabled).

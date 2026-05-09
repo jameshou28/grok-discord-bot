@@ -1,6 +1,6 @@
-# Grok Discord Bot
+# Grok Bot
 
-A chaotic VEX robotics community bot powered by Gemini 2.5 Flash. It features real-time team scouting, semantic knowledge retrieval, and reactive meme triggers.
+A VEX robotics community bot powered by Gemini 2.5 Flash. It features real-time team scouting, semantic knowledge retrieval, and reactive meme triggers.
 
 ## Key Features
 - **Team Scouting:** Non-blocking SQLite lookups for global ranks and TrueSkill scores.

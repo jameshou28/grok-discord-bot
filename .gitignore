@@ -7,3 +7,4 @@ env/
 .venv/
 *.old
 bot_logs.txt
+CLAUDE.md

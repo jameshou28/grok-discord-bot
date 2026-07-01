@@ -1,26 +1,22 @@
 # Grok Discord Bot
 
-A chaotic VEX robotics community bot powered by Gemini 2.5 Flash. It features real-time team scouting, semantic knowledge retrieval, and reactive meme triggers.
+A Discord LLM assistant powered by Gemini 2.5 Flash, with semantic knowledge retrieval over a local knowledge base.
 
 ## Key Features
-- **Team Scouting:** Non-blocking SQLite lookups for global ranks and TrueSkill scores.
 - **RAG Knowledge Base:** Semantic search through `knowledge.txt` using vector embeddings.
-- **Reactive Memes:** Context-aware image triggers for themes like bribery, "stupid" questions, or specific teams.
 - **Smart Key Rotation:** Automatically cycles through multiple API keys to bypass quota limits.
 - **Advanced Logging:** Dual-output logging to both terminal and `bot_logs.txt` with performance tracing.
 
 ## Repo layout
 - `bot.py`: Discord bot entrypoint
-- `teams.db`: SQLite DB of teams (used by `lookup_team`)
-- `knowledge.txt`, `override-manual.txt`: local knowledge sources for RAG
-- `*.embed_cache.pkl`: embedding caches generated on first run (one per knowledge file)
-- `migrate.py`: optional DB loader from an Excel file (`grokTS.xlsx`)
+- `knowledge.txt`: local knowledge source for RAG
+- `knowledge.txt.embed_cache.pkl`: embedding cache generated on first run
 
 ## Prerequisites
 - **Python 3.9+**
 - A Discord Bot Token (Message Content Intent enabled).
 - One or more [Google Gemini API Keys](https://aistudio.google.com/app/apikey).
-- A populated `teams.db` (SQLite) and `knowledge.txt` file.
+- A `knowledge.txt` file.
 
 ## Setup & Installation
 

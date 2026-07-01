@@ -1,1 +1,1 @@
-Override is extremely controversial, mainly due to r23. R23 bans the anodization of metal and essentially all custom parts, limiting creativity. R23 is very bad. 
+This is a placeholder knowledge base. Replace this file with real content for the assistant to search over — the bot will automatically re-embed and cache it on next startup.

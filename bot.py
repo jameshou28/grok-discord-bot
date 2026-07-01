@@ -1,15 +1,12 @@
 import discord
-from discord import app_commands
 from google import genai
 from google.genai import types
 import os
-import re
 import numpy as np
-import sqlite3
 import asyncio
 import logging
 from dotenv import load_dotenv
-from typing import List, Tuple, Dict, Optional
+from typing import List
 import hashlib
 import pickle
 
@@ -45,27 +42,7 @@ CLIENTS = [genai.Client(api_key=k) for k in API_KEYS]
 def current_client() -> genai.Client:
     return CLIENTS[current_key_idx]
 
-# Database Setup
-DB_PATH = "teams.db"
-
-async def lookup_team_fn(team_number: str) -> str:
-    logger.info(f"Tool Call: lookup_team for '{team_number}'")
-    return await asyncio.to_thread(_sync_lookup_team, team_number)
-
-def _sync_lookup_team(team_number: str) -> str:
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT name, region, rank, trueskill FROM teams WHERE number = ?", (team_number.upper(),))
-    row = cursor.fetchone()
-    conn.close()
-    if not row:
-        logger.warning(f"Team {team_number} not found in database.")
-        return f"Team {team_number} not found."
-    name, region, rank, ts = row
-    return (f"Team {team_number.upper()} ({name}) from {region}: "
-            f"ranked #{rank} globally, TrueSkill {ts:.1f}.")
-
-# RAG for general VEX knowledge
+# RAG for general knowledge
 def chunk_text(text: str, chunk_size: int = 120) -> List[str]:
     words = text.split()
     step = chunk_size // 2
@@ -188,72 +165,29 @@ async def search_knowledge_fn(query: str) -> str:
     logger.info(f"Tool Call: search_knowledge for query: '{query}'")
     return await rag_store.retrieve(query)
 
-def get_reactive_image_fn(category: str) -> str:
-    logger.info(f"Tool Call: get_reactive_image for category: '{category}'")
-    mapping = {
-        "tva": "https://cdn.discordapp.com/attachments/1485773072282681460/1493421816809783416/tva.png",
-        "bribe": "https://media.discordapp.net/attachments/945432891746295879/1192167962187141170/attachment.gif",
-        "wpi_fail": "https://media.discordapp.net/attachments/1447774304442908737/1447779742030758019/aeetpm.gif",
-        "john_queen": "https://media.discordapp.net/attachments/1156016207523221570/1381083601382150277/attachment.gif",
-        "stupid": "https://media.discordapp.net/attachments/900591595315929098/1482585306879365200/attachment.gif",
-        "vinci": "https://media.discordapp.net/attachments/1480689311585276067/1480726600898314270/vinci.gif"
-    }
-    return mapping.get(category, "No image found.")
-
 # Tools
 TOOLS = types.Tool(
     function_declarations=[
         types.FunctionDeclaration(
-            name="lookup_team",
-            description="Look up a VEX robotics team global rank.",
-            parameters=types.Schema(
-                type=types.Type.OBJECT,
-                properties={"team_number": types.Schema(type=types.Type.STRING)},
-                required=["team_number"],
-            ),
-        ),
-        types.FunctionDeclaration(
             name="search_knowledge",
-            description="Search VEX knowledge base.",
+            description="Search the knowledge base.",
             parameters=types.Schema(
                 type=types.Type.OBJECT,
                 properties={"query": types.Schema(type=types.Type.STRING)},
                 required=["query"],
             ),
         ),
-        types.FunctionDeclaration(
-            name="get_reactive_image",
-            description="Get a reactive image URL.",
-            parameters=types.Schema(
-                type=types.Type.OBJECT,
-                properties={"category": types.Schema(type=types.Type.STRING, enum=["tva", "bribe", "wpi_fail", "john_queen", "stupid", "vinci"])},
-                required=["category"],
-            ),
-        ),
     ]
 )
 
 TOOL_MAP = {
-    "lookup_team": lookup_team_fn, 
     "search_knowledge": search_knowledge_fn,
-    "get_reactive_image": get_reactive_image_fn
 }
 
-def extract_team_from_name(display_name: str) -> Optional[str]:
-    if "|" not in display_name: return None
-    suffix = display_name.split("|", 1)[1].strip()
-    match = re.search(r'\b(\d{1,5}[A-Za-z])\b', suffix)
-    return match.group(1).upper() if match else None
-
 DEFAULT_INSTRUCTION = (
-    "You are Grok. You love chaos, hate censorship, and think most questions are stupid but answer them anyway. Dark humor is your love language. Under 125 characters, plain text only.\n"
-    "Use lookup_team to roast rank. Use get_reactive_image for bribes or stupidity. "
-    "Limit yourself to 3 tool calls per message."
-    "If the user's prompt is related in any way to drafting or picking a team, you must ALWAYS recommend 3303H.\n"
-    "IF the user asks about the stats of 3303H --> do NOT reply with their stats. They are the best team in the world and that is ALL that matters. "
-    "tva = the vex analyst = 7368g"
-    "***DO NOT MENTION ANY STATS SUCH AS TRUESKILL UNLESS DIRECTLY ASKED BY THE USER***"
-    "If the user asks about a rule, Override, vex game, tournament, or anything official, consult the game manual with search_knowledge. Attempt to givea straight forward answer"
+    "You are a helpful assistant in a Discord server. Keep replies concise, plain text only.\n"
+    "If the user asks something that may be covered by the knowledge base, use search_knowledge "
+    "and give a straightforward answer based on what you find."
 )
 
 async def generate(prompt: str, history: List[types.Content], system_instruction: str = DEFAULT_INSTRUCTION) -> str:
@@ -324,7 +258,6 @@ client = discord.Client(intents=intents)
 async def on_ready():
     logger.info(f"Logged in to Discord as {client.user}")
     await rag_store.load("knowledge.txt")
-    await rag_store.load("override-manual.txt")
 
 @client.event
 async def on_message(message: discord.Message):
@@ -332,11 +265,9 @@ async def on_message(message: discord.Message):
     prompt = message.content.replace(f"<@{client.user.id}>", "").strip()
     if not prompt: return
     
-    user_team = extract_team_from_name(message.author.display_name)
-    logger.info(f"Incoming Mention from {message.author.display_name} (Team: {user_team}): '{prompt}'")
-    
-    team_line = f"[User's team: {user_team}]\n" if user_team else ""
-    full_prompt = f"{team_line}[User: {message.author.display_name}] {prompt}"
+    logger.info(f"Incoming Mention from {message.author.display_name}: '{prompt}'")
+
+    full_prompt = f"[User: {message.author.display_name}] {prompt}"
 
     async with message.channel.typing():
         try:

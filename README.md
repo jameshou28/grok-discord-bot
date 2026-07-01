@@ -1,4 +1,4 @@
-# Grok Discord Bot
+# Grok Bot
 
 A Discord LLM assistant powered by Gemini 2.5 Flash, with semantic knowledge retrieval over a local knowledge base.
 

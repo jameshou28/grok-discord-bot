@@ -2,6 +2,8 @@ import discord
 from google import genai
 from google.genai import types
 import os
+import json
+import httpx
 import numpy as np
 import asyncio
 import logging
@@ -10,11 +12,10 @@ from typing import List
 import hashlib
 import pickle
 
-# --- LOGGING CONFIGURATION ---
+# logging config
 log_format = '%(asctime)s - %(levelname)s - %(message)s'
 date_format = '%Y-%m-%d %H:%M:%S'
 
-# Create handlers: one for the file, one for the terminal
 file_handler = logging.FileHandler('bot_logs.txt', encoding='utf-8')
 console_handler = logging.StreamHandler()
 
@@ -25,11 +26,11 @@ logging.basicConfig(
     handlers=[file_handler, console_handler]
 )
 logger = logging.getLogger('grok_bot')
-# -----------------------------
 
 load_dotenv()
 
-# API clients
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+
 keys_env = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
 API_KEYS = [k.strip() for k in keys_env.split(",") if k.strip()]
 current_key_idx = 0
@@ -42,7 +43,11 @@ CLIENTS = [genai.Client(api_key=k) for k in API_KEYS]
 def current_client() -> genai.Client:
     return CLIENTS[current_key_idx]
 
-# RAG for general knowledge
+# Hack Club AI — fallback for when gemini api keys are used
+HACKCLUB_API_KEY = os.getenv("HACKCLUB_AI_KEY", "").strip()
+HACKCLUB_URL = "https://ai.hackclub.com/proxy/v1/chat/completions"
+HACKCLUB_MODEL = os.getenv("HACKCLUB_MODEL", "google/gemini-2.5-flash-lite")
+
 def chunk_text(text: str, chunk_size: int = 120) -> List[str]:
     words = text.split()
     step = chunk_size // 2
@@ -99,7 +104,6 @@ class RAGStore:
         self.ready = False
 
     def _cache_path(self, filepath: str) -> str:
-        # One cache file per source file, stored next to it
         return filepath + ".embed_cache.pkl"
 
     def _file_hash(self, filepath: str) -> str:
@@ -108,7 +112,7 @@ class RAGStore:
             h.update(f.read())
         return h.hexdigest()
 
-    async def load(self, filepath: str):
+    async def load(self, filepath: str, cache_only: bool = False):
         if not os.path.exists(filepath):
             logger.error(f"Knowledge file '{filepath}' not found.")
             return
@@ -128,6 +132,11 @@ class RAGStore:
                 return
             else:
                 logger.info(f"Cache stale for '{filepath}', re-embedding...")
+
+        # cache_only (bot startup): never embed here — run embed.py instead
+        if cache_only:
+            logger.error(f"No valid embedding cache for '{filepath}'. Run 'python3 src/embed.py' to build it.")
+            return
 
         # No valid cache — embed and save
         with open(filepath, encoding="utf-8") as f:
@@ -184,11 +193,71 @@ TOOL_MAP = {
     "search_knowledge": search_knowledge_fn,
 }
 
-DEFAULT_INSTRUCTION = (
-    "You are a helpful assistant in a Discord server. Keep replies concise, plain text only.\n"
-    "If the user asks something that may be covered by the knowledge base, use search_knowledge "
-    "and give a straightforward answer based on what you find."
+HACKCLUB_TOOLS = [{
+    "type": "function",
+    "function": {
+        "name": "search_knowledge",
+        "description": "Search the knowledge base.",
+        "parameters": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+    },
+}]
+
+_FALLBACK_INSTRUCTION = (
+    "You are Grok. You are a helpful assistant in a Discord server. Under 125 characters, plain text only.\n"
+    "If the user asks something that may be covered by the knowledge base, use search_knowledge and give a straightforward answer"
 )
+
+def _load_instruction(path: str = os.path.join(DATA_DIR, "instructions.txt")) -> str:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read().strip() or _FALLBACK_INSTRUCTION
+    except FileNotFoundError:
+        logger.warning(f"'{path}' not found, using built-in default instruction.")
+        return _FALLBACK_INSTRUCTION
+
+DEFAULT_INSTRUCTION = _load_instruction()
+
+async def generate_hackclub(prompt: str, system_instruction: str = DEFAULT_INSTRUCTION) -> str:
+    messages = [
+        {"role": "system", "content": system_instruction},
+        {"role": "user", "content": prompt},
+    ]
+    headers = {"Authorization": f"Bearer {HACKCLUB_API_KEY}"}
+
+    async with httpx.AsyncClient(timeout=60) as http:
+        for logic_turn in range(5):
+            logger.info(f"Hack Club AI Request (Logic Turn {logic_turn + 1})")
+            resp = await http.post(HACKCLUB_URL, headers=headers, json={
+                "model": HACKCLUB_MODEL,
+                "messages": messages,
+                "tools": HACKCLUB_TOOLS,
+            })
+            resp.raise_for_status()
+            message = resp.json()["choices"][0]["message"]
+            messages.append(message)
+
+            tool_calls = message.get("tool_calls")
+            if not tool_calls:
+                final_text = message.get("content") or ""
+                logger.info(f"Hack Club AI Response: {final_text}")
+                return final_text
+
+            for tc in tool_calls:
+                name = tc["function"]["name"]
+                args = json.loads(tc["function"]["arguments"] or "{}")
+                fn = TOOL_MAP.get(name)
+                result = await fn(**args) if asyncio.iscoroutinefunction(fn) else fn(**args)
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": str(result),
+                })
+
+    return "Error: too many tool calls."
 
 async def generate(prompt: str, history: List[types.Content], system_instruction: str = DEFAULT_INSTRUCTION) -> str:
     global current_key_idx
@@ -225,8 +294,14 @@ async def generate(prompt: str, history: List[types.Content], system_instruction
                     raise e
 
         if response is None:
-            logger.error("ALL API KEYS EXHAUSTED.")
-            return "all my brain cells are fried. try again later."
+            logger.error("ALL GEMINI KEYS EXHAUSTED. Falling back to Hack Club AI.")
+            if not HACKCLUB_API_KEY:
+                return "all my brain cells are fried. try again later."
+            try:
+                return await generate_hackclub(prompt, system_instruction)
+            except Exception as e:
+                logger.error(f"Hack Club AI fallback failed: {e}", exc_info=True)
+                return "all my brain cells are fried. try again later."
 
         logic_turns += 1
         parts = response.candidates[0].content.parts
@@ -257,7 +332,7 @@ client = discord.Client(intents=intents)
 @client.event
 async def on_ready():
     logger.info(f"Logged in to Discord as {client.user}")
-    await rag_store.load("knowledge.txt")
+    await rag_store.load(os.path.join(DATA_DIR, "knowledge.txt"), cache_only=True)
 
 @client.event
 async def on_message(message: discord.Message):
@@ -277,4 +352,5 @@ async def on_message(message: discord.Message):
             logger.error(f"Failed to handle message: {e}", exc_info=True)
             await message.reply(f"error: {e}")
 
-client.run(os.getenv("DISCORD_TOKEN"))
+if __name__ == "__main__":
+    client.run(os.getenv("DISCORD_TOKEN"))

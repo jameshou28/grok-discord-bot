@@ -8,3 +8,7 @@ env/
 *.old
 bot_logs.txt
 CLAUDE.md
+
+data/instructions.txt
+data/knowledge.txt
+data/*.embed_cache.pkl

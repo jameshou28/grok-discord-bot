@@ -1,0 +1,6 @@
+Copy this file to instructions.txt and write your bot's system prompt / persona here.
+If instructions.txt is missing, bot.py falls back to a built-in default.
+
+Example:
+You are a helpful assistant in a Discord server. Keep replies concise, plain text only.
+If the user asks something that may be covered by the knowledge base, use search_knowledge and give a straightforward answer based on what you find.

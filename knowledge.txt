@@ -1,1 +1,0 @@
-This is a placeholder knowledge base. Replace this file with real content for the assistant to search over — the bot will automatically re-embed and cache it on next startup.

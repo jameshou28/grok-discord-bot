@@ -1,0 +1,8 @@
+Put your own knowledge base here, then rename this file to knowledge.txt.
+
+Plain text — it gets chunked (120-word sliding window, 50% overlap) and embedded
+at startup. The bot retrieves the most relevant chunks via the search_knowledge tool.
+
+Example:
+Our support hours are 9am-5pm EST, Monday through Friday.
+Refunds are processed within 5 business days.

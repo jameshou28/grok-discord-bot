@@ -204,11 +204,20 @@ HACKCLUB_TOOLS = [{
     },
 }]
 
-DEFAULT_INSTRUCTION = (
-    "You are a helpful assistant in a Discord server. Keep replies concise, plain text only.\n"
-    "If the user asks something that may be covered by the knowledge base, use search_knowledge "
-    "and give a straightforward answer based on what you find."
+_FALLBACK_INSTRUCTION = (
+    "You are Grok. You are a helpful assistant in a Discord server. Under 125 characters, plain text only.\n"
+    "If the user asks something that may be covered by the knowledge base, use search_knowledge and give a straightforward answer"
 )
+
+def _load_instruction(path: str = "instructions.txt") -> str:
+    try:
+        with open(path, encoding="utf-8") as f:
+            return f.read().strip() or _FALLBACK_INSTRUCTION
+    except FileNotFoundError:
+        logger.warning(f"'{path}' not found, using built-in default instruction.")
+        return _FALLBACK_INSTRUCTION
+
+DEFAULT_INSTRUCTION = _load_instruction()
 
 async def generate_hackclub(prompt: str, system_instruction: str = DEFAULT_INSTRUCTION) -> str:
     messages = [

@@ -9,6 +9,6 @@ env/
 bot_logs.txt
 CLAUDE.md
 
-instructions.txt
-knowledge.txt
-knowledge.txt.embed_cache.pkl
+data/instructions.txt
+data/knowledge.txt
+data/*.embed_cache.pkl

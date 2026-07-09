@@ -29,6 +29,8 @@ logger = logging.getLogger('grok_bot')
 
 load_dotenv()
 
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+
 keys_env = os.getenv("GEMINI_API_KEYS", os.getenv("GEMINI_API_KEY", ""))
 API_KEYS = [k.strip() for k in keys_env.split(",") if k.strip()]
 current_key_idx = 0
@@ -133,7 +135,7 @@ class RAGStore:
 
         # cache_only (bot startup): never embed here — run embed.py instead
         if cache_only:
-            logger.error(f"No valid embedding cache for '{filepath}'. Run 'python3 embed.py' to build it.")
+            logger.error(f"No valid embedding cache for '{filepath}'. Run 'python3 src/embed.py' to build it.")
             return
 
         # No valid cache — embed and save
@@ -209,7 +211,7 @@ _FALLBACK_INSTRUCTION = (
     "If the user asks something that may be covered by the knowledge base, use search_knowledge and give a straightforward answer"
 )
 
-def _load_instruction(path: str = "instructions.txt") -> str:
+def _load_instruction(path: str = os.path.join(DATA_DIR, "instructions.txt")) -> str:
     try:
         with open(path, encoding="utf-8") as f:
             return f.read().strip() or _FALLBACK_INSTRUCTION
@@ -330,7 +332,7 @@ client = discord.Client(intents=intents)
 @client.event
 async def on_ready():
     logger.info(f"Logged in to Discord as {client.user}")
-    await rag_store.load("knowledge.txt", cache_only=True)
+    await rag_store.load(os.path.join(DATA_DIR, "knowledge.txt"), cache_only=True)
 
 @client.event
 async def on_message(message: discord.Message):

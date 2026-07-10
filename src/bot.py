@@ -46,7 +46,7 @@ def current_client() -> genai.Client:
 # Hack Club AI — fallback for when gemini api keys are used
 HACKCLUB_API_KEY = os.getenv("HACKCLUB_AI_KEY", "").strip()
 HACKCLUB_URL = "https://ai.hackclub.com/proxy/v1/chat/completions"
-HACKCLUB_MODEL = os.getenv("HACKCLUB_MODEL", "google/gemini-2.5-flash-lite")
+HACKCLUB_MODEL = os.getenv("HACKCLUB_MODEL", "google/gemini-3.1-flash-lite")
 
 def chunk_text(text: str, chunk_size: int = 120) -> List[str]:
     words = text.split()
@@ -275,7 +275,7 @@ async def generate(prompt: str, history: List[types.Content], system_instruction
             try:
                 logger.info(f"Gemini Request using Key Index {current_key_idx} (Logic Turn {logic_turns + 1})")
                 response = await current_client().aio.models.generate_content(
-                    model="gemini-2.5-flash",
+                    model="gemini-3.1-flash-lite",
                     contents=history,
                     config=config,
                 )
